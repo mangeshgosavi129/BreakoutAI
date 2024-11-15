@@ -44,14 +44,14 @@ def load_data(file_source: str) -> Optional[pd.DataFrame]:
     return df
 
 def process_data(df: pd.DataFrame, name_column: str, query_template: str) -> None:
-    """Process each row in the dataframe and update the 'response' column with results."""
+    """Process each row in the dataframe and update the 'Responses' column with results."""
     # Ensure the 'response' column exists in the DataFrame
-    if 'response' not in df.columns:
-        df['response'] = None
+    if 'Responses' not in df.columns:
+        df['Responses'] = None
 
     # Optimize query once before the loop
     optimized_query_template = seo_query_optimizer(query_template)
-    
+    print(optimized_query_template)
     # Initialize Streamlit progress components
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -65,23 +65,23 @@ def process_data(df: pd.DataFrame, name_column: str, query_template: str) -> Non
             
             # Skip if name is empty
             if pd.isna(row[name_column]):
-                df.at[idx, 'response'] = "Empty name provided"
+                df.at[idx, 'Responses'] = "Empty name provided"
                 continue
             
             # Substitute the name in the pre-optimized query
             current_query = optimized_query_template.replace("{Name}", str(row[name_column]))
-            
+            print(current_query)
             # Get and process search results
             search_results = get_search_results(current_query)
             extracted_info = extract_exact_info_from_results(search_results, current_query)
-            
+            print(extracted_info)
             # Store results directly in the DataFrame's 'response' column
-            df.at[idx, 'response'] = extracted_info if extracted_info else "No information found"
+            df.at[idx, 'Responses'] = extracted_info if extracted_info else "No information found"
             
         except Exception as e:
-            df.at[idx, 'response'] = f"Error: {str(e)}"
-    
+            df.at[idx, 'Responses'] = f"Error: {str(e)}"
     st.session_state.processing_complete = True
+    return df
 
 def save_results(output_format: str, results_df: pd.DataFrame):
     if output_format == "CSV":
@@ -126,13 +126,13 @@ def main():
             )
             
             if st.button("🔍 Start Processing"):
-                st.session_state.results = []  # Reset results
                 st.session_state.processing_complete = False
-                process_data(df, name_column, query_template)
+                st.session_state.results_df = process_data(df, name_column, query_template)
+                st.session_state.processing_complete = True
     
     if st.session_state.processing_complete:
+        results_df = st.session_state.get("results_df", pd.DataFrame())
         st.markdown("### Results")
-        results_df = pd.DataFrame(st.session_state.results)
         st.dataframe(results_df)
         
         # Save options
@@ -141,7 +141,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("Created with ❤️ | [Documentation](https://your-docs-link.com)")
+    st.markdown("Created with ❤️ | [Documentation](https://docs.google.com/document/d/1nu1fckgzr8YSaywodM_2OCMyvjE981LZHMl-o6EGo3U/edit?usp=sharing)")
 
 if __name__ == "__main__":
     main()
