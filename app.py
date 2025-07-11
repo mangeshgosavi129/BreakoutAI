@@ -9,17 +9,11 @@ from helper import (
     get_search_results,
     extract_exact_info_from_results
 )
-from dotenv import load_dotenv
-import os
-
-# Load environment variables
-load_dotenv()
-
 def init_session_state():
     if 'processing_complete' not in st.session_state:
         st.session_state.processing_complete = False
 
-def load_data(file_source: str) -> Optional[pd.DataFrame]:
+def load_data(file_source: str, credentials_path: str) -> Optional[pd.DataFrame]:
     df = None
     
     if file_source == "Upload CSV":
@@ -35,7 +29,6 @@ def load_data(file_source: str) -> Optional[pd.DataFrame]:
         sheet_url = st.text_input("Enter Google Sheets URL")
         if sheet_url:
             try:
-                credentials_path = os.getenv("CREDENTIALS_PATH")
                 df = sheets_to_dataframe(sheet_url, credentials_path)
                 st.success("Google Sheet loaded successfully!")
             except Exception as e:
@@ -43,47 +36,43 @@ def load_data(file_source: str) -> Optional[pd.DataFrame]:
     
     return df
 
-def process_data(df: pd.DataFrame, name_column: str, query_template: str) -> None:
+def process_data(df: pd.DataFrame, name_column: str, query_template: str, serp_api_key: str, together_api_key: str) -> pd.DataFrame:
     """Process each row in the dataframe and update the 'Responses' column with results."""
-    # Ensure the 'response' column exists in the DataFrame
     if 'Responses' not in df.columns:
         df['Responses'] = None
 
-    # Optimize query once before the loop
-    optimized_query_template = seo_query_optimizer(query_template)
-    print(optimized_query_template)
-    # Initialize Streamlit progress components
+    optimized_query_template = seo_query_optimizer(query_template, together_api_key)
+    if not optimized_query_template:
+        st.error("Failed to optimize query. Please check your Together API key.")
+        return df
+
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     for idx, row in df.iterrows():
         try:
-            # Update progress
             progress = (idx + 1) / len(df)
             progress_bar.progress(progress)
             status_text.text(f"Processing {idx + 1} of {len(df)}: {row[name_column]}")
             
-            # Skip if name is empty
             if pd.isna(row[name_column]):
                 df.at[idx, 'Responses'] = "Empty name provided"
                 continue
             
-            # Substitute the name in the pre-optimized query
             current_query = optimized_query_template.replace("{Name}", str(row[name_column]))
-            print(current_query)
-            # Get and process search results
-            search_results = get_search_results(current_query)
-            extracted_info = extract_exact_info_from_results(search_results, current_query)
-            print(extracted_info)
-            # Store results directly in the DataFrame's 'response' column
+            
+            search_results = get_search_results(current_query, serp_api_key)
+            extracted_info = extract_exact_info_from_results(search_results, current_query, together_api_key)
+            
             df.at[idx, 'Responses'] = extracted_info if extracted_info else "No information found"
             
         except Exception as e:
             df.at[idx, 'Responses'] = f"Error: {str(e)}"
+    
     st.session_state.processing_complete = True
     return df
 
-def save_results(output_format: str, results_df: pd.DataFrame):
+def save_results(output_format: str, results_df: pd.DataFrame, credentials_path: str):
     if output_format == "CSV":
         csv_data = results_df.to_csv(index=False)
         st.download_button(
@@ -97,7 +86,6 @@ def save_results(output_format: str, results_df: pd.DataFrame):
         sheet_url = st.text_input("Enter destination Google Sheet URL")
         if sheet_url and st.button("Save to Google Sheets"):
             try:
-                credentials_path = os.getenv("CREDENTIALS_PATH")
                 dataframe_to_sheets(results_df, sheet_url, credentials_path)
                 st.success("Results saved to Google Sheets successfully!")
             except Exception as e:
@@ -105,6 +93,12 @@ def save_results(output_format: str, results_df: pd.DataFrame):
 
 def main():
     st.set_page_config(page_title="BreakoutAI", layout="wide")
+    
+    st.sidebar.title("API Configuration")
+    serp_api_key = st.sidebar.text_input("SERP API Key", type="password")
+    together_api_key = st.sidebar.text_input("Together API Key", type="password")
+    credentials_path = st.sidebar.text_input("Google Credentials Path", help="Path to your Google credentials JSON file.")
+
     st.title("BreakoutAI")
     st.markdown("---")
     
@@ -112,7 +106,7 @@ def main():
     
     with st.expander("Data Input Settings", expanded=True):
         file_source = st.radio("Choose data source:", ["Upload CSV", "Google Sheets"])
-        df = load_data(file_source)
+        df = load_data(file_source, credentials_path)
         
         if df is not None:
             st.write("Preview of loaded data:")
@@ -126,20 +120,21 @@ def main():
             )
             
             if st.button("🔍 Start Processing"):
-                st.session_state.processing_complete = False
-                st.session_state.results_df = process_data(df, name_column, query_template)
-                st.session_state.processing_complete = True
+                if not all([serp_api_key, together_api_key, credentials_path]):
+                    st.error("Please provide all API keys and credentials path in the sidebar.")
+                else:
+                    st.session_state.processing_complete = False
+                    st.session_state.results_df = process_data(df, name_column, query_template, serp_api_key, together_api_key)
+                    st.session_state.processing_complete = True
     
     if st.session_state.processing_complete:
         results_df = st.session_state.get("results_df", pd.DataFrame())
         st.markdown("### Results")
         st.dataframe(results_df)
         
-        # Save options
         output_format = st.radio("Save results as:", ["CSV", "Google Sheets"])
-        save_results(output_format, results_df)
+        save_results(output_format, results_df, credentials_path)
     
-    # Footer
     st.markdown("---")
     st.markdown("Created with ❤️ | [Documentation](https://docs.google.com/document/d/1nu1fckgzr8YSaywodM_2OCMyvjE981LZHMl-o6EGo3U/edit?usp=sharing)")
 

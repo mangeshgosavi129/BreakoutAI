@@ -38,7 +38,7 @@ Step 2: Prepare the `.env` File
    CREDENTIALS_PATH=path/to/your/credentials.json  
    ```  
    - SERP_API_KEY: Sign up on SERP API (https://serpapi.com/) to get your API key.  
-   - TOGETHER_API_KEY: Sign up on Together API (https://togetherapi.com/) to get your API key.  
+   - TOGETHER_API_KEY: Sign up on Together API (https://api.together.ai/) to get your API key.  
    - CREDENTIALS_PATH: The path to the Google Sheets credentials JSON file downloaded in Step 1.  
 
 Step 3: Run the Application  

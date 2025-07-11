@@ -8,6 +8,7 @@ from serpapi import GoogleSearch
 
 load_dotenv()
 
+
 def csv_to_dataframe(file_path: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(file_path)
@@ -66,9 +67,10 @@ def dataframe_to_sheets(df: pd.DataFrame, sheet_url: str, credentials_path: str)
 
     except Exception as e:
         raise Exception(f"Error updating Google Sheet: {str(e)}")
-    
-def seo_query_optimizer(input_query):
+
+def seo_query_optimizer(input_query: str, together_api_key: str) -> str:
     try:
+        client = Together(api_key=together_api_key)
         completion = client.chat.completions.create(
             model="meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
             messages=[{
@@ -83,10 +85,10 @@ def seo_query_optimizer(input_query):
         print("Error during SEO optimization:", e)
         return None
 
-def get_search_results(query):
+def get_search_results(query: str, serp_api_key: str) -> dict:
     params = {
         "q": query,  # Your search query
-        "api_key": os.getenv("SERP_API_KEY"),  # Your SerpAPI key
+        "api_key": serp_api_key,  # Your SerpAPI key
         "engine": "google",  # We are using Google search engine here
         "google_domain": "google.com",  # Set the domain for Google search
         "gl": "in",  # Country-specific results (optional)
@@ -98,8 +100,9 @@ def get_search_results(query):
     
     return results
 
-def extract_exact_info_from_results(search_results, query):
+def extract_exact_info_from_results(search_results: dict, query: str, together_api_key: str) -> str:
     try:
+        client = Together(api_key=together_api_key)
         input_message = f"Extract the exact information from the following search results that directly answers the query: '{query}'\n and respond with no extra text, explanations, or formatting, just the exact query text.\nIf no direct match, return an empty string.\n\nSearch Results:\n{search_results}"
 
         completion = client.chat.completions.create(
@@ -121,23 +124,28 @@ def extract_exact_info_from_results(search_results, query):
         print(f"Error during processing: {e}")
         return ""
 
-# Setup
-credentials_path = os.getenv("CREDENTIALS_PATH")
-sheet_url = os.getenv("SHEET_URL")
-client = Together(api_key=os.getenv("TOGETHER_API_KEY"))  
-
 if __name__ == '__main__':
-    df = csv_to_dataframe('input.csv')
-    df2 = sheets_to_dataframe(sheet_url, credentials_path)
-    dataframe_to_csv(df, 'output.csv')
-    dataframe_to_sheets(df2, sheet_url, credentials_path)
+    # This section is for testing purposes and requires a .env file with the necessary keys.
+    load_dotenv()
+    credentials_path = os.getenv("CREDENTIALS_PATH")
+    sheet_url = os.getenv("SHEET_URL")
+    serp_api_key = os.getenv("SERP_API_KEY")
+    together_api_key = os.getenv("TOGETHER_API_KEY")
 
-    # Example usage
-    input_query = "find me linkedin of {name\} who is in pict"
+    if not all([credentials_path, sheet_url, serp_api_key, together_api_key]):
+        print("Please set up your .env file with the required variables for testing.")
+    else:
+        df = csv_to_dataframe('input.csv')
+        df2 = sheets_to_dataframe(sheet_url, credentials_path)
+        dataframe_to_csv(df, 'output.csv')
+        dataframe_to_sheets(df2, sheet_url, credentials_path)
 
-    optimized_query = seo_query_optimizer(input_query)
-    print(optimized_query)
-    results = get_search_results(optimized_query)
+        # Example usage
+        input_query = "find me linkedin of {name} who is in pict"
 
-    result = extract_exact_info_from_results(results, input_query)
-    print(result)  
+        optimized_query = seo_query_optimizer(input_query, together_api_key)
+        print(optimized_query)
+        results = get_search_results(optimized_query, serp_api_key)
+
+        result = extract_exact_info_from_results(results, input_query, together_api_key)
+        print(result)  
